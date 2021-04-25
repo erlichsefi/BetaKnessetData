@@ -39,6 +39,7 @@ options = webdriver.ChromeOptions()
 options.add_experimental_option("excludeSwitches", ["enable-automation"])
 options.add_experimental_option('useAutomationExtension', False)
 options.add_argument("disable-blink-features=AutomationControlled")
+
 driver = webdriver.Chrome(ChromeDriverManager().install(),options=options)
 url = urlparse(base_url)
 for rule_id in range(latest_rule_id, 0, -1):
@@ -49,45 +50,51 @@ for rule_id in range(latest_rule_id, 0, -1):
     driver.get(new_url)
     
     time.sleep(5)
+    try:
+        in_favor_name, in_favor_party = scrap_table(driver, 'שהצביעו בעד')
+        against_name, against_party = scrap_table(driver, 'שהצביעו נגד')
+        avoid_name, avoid_party = scrap_table(driver, 'שהצביעו שנמנעו')
+        didnot_vote_name, didnot_vote_party = scrap_table(driver, 'שלא הצביע') 
 
-    in_favor_name, in_favor_party = scrap_table(driver, 'שהצביעו בעד')
-    against_name, against_party = scrap_table(driver, 'שהצביעו נגד')
-    avoid_name, avoid_party = scrap_table(driver, 'שהצביעו שנמנעו')
+        committee_num = driver.find_element_by_xpath(f"//*[contains(text(),'מספר הצבעה')]/./../td[2]").text
 
-    committee_num = driver.find_element_by_xpath(f"//*[contains(text(),'מספר הצבעה')]/./../td[2]").text
+        meeting_num = driver.find_element_by_xpath(f"//*[contains(text(),'מספר ישיבה')]/./../td[2]").text
 
-    meeting_num = driver.find_element_by_xpath(f"//*[contains(text(),'מספר ישיבה')]/./../td[2]").text
+        date = driver.find_element_by_xpath(f"//*[contains(text(),'תאריך')]/./../td[2]").text
 
-    date = driver.find_element_by_xpath(f"//*[contains(text(),'תאריך')]/./../td[2]").text
+        rule = driver.find_element_by_xpath(f"//*[contains(text(),'שם החוק')]/./../td[2]").text
 
-    rule = driver.find_element_by_xpath(f"//*[contains(text(),'שם החוק')]/./../td[2]").text
+        head_name = driver.find_element_by_xpath(f"//*[contains(text(),'יושב ראש')]/./../td[2]").text
 
-    head_name = driver.find_element_by_xpath(f"//*[contains(text(),'יושב ראש')]/./../td[2]").text
+        in_favor_df = pd.DataFrame(list(zip(in_favor_name, in_favor_party))[1:], columns=['Name', 'Party'])
+        in_favor_df['Vote'] = 'בעד'
 
-    in_favor_df = pd.DataFrame(list(zip(in_favor_name, in_favor_party))[1:], columns=['Name', 'Party'])
-    in_favor_df['Vote'] = 'בעד'
+        against_df = pd.DataFrame(list(zip(against_name, against_party))[1:], columns=['Name', 'Party'])
+        against_df['Vote'] = 'נגד'
 
-    against_df = pd.DataFrame(list(zip(against_name, against_party))[1:], columns=['Name', 'Party'])
-    against_df['Vote'] = 'נגד'
+        avoid_df = pd.DataFrame(list(zip(avoid_name, avoid_party))[1:], columns=['Name', 'Party'], )
+        avoid_df['Vote'] = 'נמנע'
 
-    avoid_df = pd.DataFrame(list(zip(avoid_name, avoid_party))[1:], columns=['Name', 'Party'], )
-    avoid_df['Vote'] = 'נמנע'
+        didnot_vote_df = pd.DataFrame(list(zip(didnot_vote_name, didnot_vote_party))[1:], columns=['Name', 'Party'], )
+        didnot_vote_df['Vote'] = 'לא הצביע'
 
-    dataframes = [in_favor_df, against_df, avoid_df]
+        dataframes = [in_favor_df, against_df, avoid_df, didnot_vote_df]
 
-    for df in dataframes:
-        df["Party"] = df["Party"].apply( lambda x: np.nan if is_empty(x) else x)
-        df.fillna(method='ffill', inplace=True)
-        df['Rule Name'] = rule
-        df['Meeting Date'] = date
-        df['Committee Leader Name'] = head_name
-        df['Vote Number'] = committee_num
-        df['Meeting Number'] = meeting_num
-        df['Id'] = 'https://www.knesset.gov.il/vote/heb/Vote_Res_Map.asp?vote_id_t='+str(rule_id)
+        for df in dataframes:
+            df["Party"] = df["Party"].apply( lambda x: np.nan if is_empty(x) else x)
+            df.fillna(method='ffill', inplace=True)
+            df['Rule Name'] = rule
+            df['Meeting Date'] = date
+            df['Committee Leader Name'] = head_name
+            df['Vote Number'] = committee_num
+            df['Meeting Number'] = meeting_num
+            df['Id'] = 'https://www.knesset.gov.il/vote/heb/Vote_Res_Map.asp?vote_id_t='+str(rule_id)
 
-    current_path = os.getcwd()
+        current_path = os.getcwd()
 
-    final_df = pd.concat(dataframes)
-    
-    final_df.to_csv(f'{current_path}/{rule_id}.csv', encoding='utf-8-sig', index=False)
-    print("downloaded data for rule id: ", rule_id)
+        final_df = pd.concat(dataframes)
+        
+        final_df.to_csv(f'{current_path}/{rule_id}.csv', encoding='utf-8-sig', index=False)
+        print("downloaded data for rule id: ", rule_id)
+    except NoSuchElementException:
+        print("can't find vote id: ", rule_id)
