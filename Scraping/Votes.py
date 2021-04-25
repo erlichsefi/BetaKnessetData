@@ -5,7 +5,6 @@ import os,time
 import requests
 import numpy as np
 import pandas as pd
-import lxml.html as LH
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 from urllib.parse import urlparse,urlunparse,urlencode
